@@ -16,12 +16,16 @@ pip install -r requirements.txt
 # 2. Place Belgium dataset  (see data/README.md for download instructions)
 #    Expected path: data/belgium.csv
 
-# 3. Run full benchmark (steps 1, 4, 24, 96) — reproduces Table 3
+# 3. Point forecasting — train the base model and Re-TFT (Tables 4-5; feeds Case A)
 python train.py --data data/belgium.csv --steps 1 4 24 96
 
-# Results land in: results/step{1,4,24,96}/
-#   test_predictions.csv   — y_true / y_base / y_final / y_p10 / y_p90
-#   metrics.txt            — RMSE, MAE, MAPE, R², PICP, PINAW, CWC
+# Point results land in: results/step{1,4,24,96}/
+#   test_predictions.csv   — time / y_true / y_base / y_final   (point forecasts)
+#   metrics_summary.txt    — RMSE, MAE, MAPE, R^2               (point metrics)
+
+# 4. Interval (P10/P90) forecasting — single-stage direct quantile (Tables 7-8)
+python interval_forecasting/fair_compare.py
+#   -> results/interval_fair/fair_comparison.csv   (PICP / MPIW / CWC per model & horizon)
 ```
 
 ---
@@ -29,8 +33,8 @@ python train.py --data data/belgium.csv --steps 1 4 24 96
 ## Repository layout
 
 ```
-Re-TFT_repo/
-├── train.py                        # Main training + evaluation script
+Re-TFT/
+├── train.py                        # Point forecasting: base model + Re-TFT
 ├── requirements.txt
 ├── data/
 │   └── README.md                   # Dataset download instructions
@@ -46,7 +50,10 @@ Re-TFT_repo/
 │   ├── case_a1_dr_settlement.py    # Case A-I: DR settlement flexibility
 │   ├── case_a2_bess_peakshaving.py # Case A-II: LP-based BESS peak shaving
 │   └── case_b_risk_mpc.py          # Case B: Risk-aware rolling horizon MPC
-└── results/                        # Auto-created by train.py
+├── interval_forecasting/           # P10/P90 interval forecasting (Tables 7-8)
+│   ├── fair_compare.py             # Entry point: single-stage direct quantile
+│   └── multimodel_base_residual_quantile.py  # Architectures + pinball engine
+└── results/                        # Auto-created by the scripts
 ```
 
 ---
@@ -164,6 +171,20 @@ The actual implementation is a Pearson-correlation + ΔRMSE conditional branch
   train/val/test split, identical look-back window, and identical forecast
   horizons (steps 1 / 4 / 24 / 96). Re-TFT itself is trained and evaluated by the
   `train.py` script in this repository.
+
+- **Point vs. interval baselines.** The *point*-forecasting baseline numbers
+  (Tables 4, 9, 10) come from the external Time-Series-Library / Darts runs
+  described above. The *interval*-forecasting comparison (Tables 7-8) is produced
+  by the self-contained harness in `interval_forecasting/`, which re-implements
+  every architecture with an **identical single-stage direct-quantile head**
+  (q10/q50/q90) trained under a multi-quantile pinball loss, so that all models
+  are compared under the same probabilistic protocol and CWC definition. In that
+  harness the proposed model corresponds to the fully frozen variant
+  (`Re-TFT (FullFreeze)`); `CNNFrontTFT` without freezing is the CNN-TFT base.
+  Interval forecasting is reported for the Belgium and London settings, the
+  scenarios most directly tied to tail-risk and the downstream operational
+  decisions; the smoother, highly aggregated Spain grid is used for
+  point-forecast transfer only.
 
 ## Environment
 
