@@ -150,9 +150,11 @@ The actual implementation is a Pearson-correlation + ΔRMSE conditional branch
 
 - **Datasets.** Three load-forecasting datasets are used: the Belgian national
   grid (Elia, primary benchmark), the Spain national grid (Kaggle), and the
-  London microgrid (Smart Meters in London). None of the raw/processed CSVs are
-  redistributed here; **`data/README.md`** documents how to obtain and assemble
-  each one, including the expected column schema and, for Belgium, the SHA-256
+  London microgrid (Smart Meters in London). The full raw/processed CSVs are not
+  redistributed here, except for a small representative 14-day London sample
+  (`data/london_data.csv`) shipped so the pipeline can be run out of the box;
+  **`data/README.md`** documents how to obtain and assemble each full dataset,
+  including the expected column schema and, for Belgium, the SHA-256
   checksum of the exact file used in the paper. The London weather features come
   from archived Dark Sky records (the API was retired in 2023); see the
   reproducibility note in `data/README.md` for an Open-Meteo substitute.
