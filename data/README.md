@@ -100,16 +100,6 @@ led by UK Power Networks (half-hourly readings from 5,500+ households).
 > (e.g., [Open-Meteo](https://open-meteo.com/)) can be substituted for the
 > Greater-London nodes to regenerate equivalent features.
 
-### Provided sample
-
-A representative **14-day excerpt** of the processed London series is shipped as
-`data/london_data.csv` (336 hourly records, `2012-01-01 00:00` to
-`2012-01-14 23:00`) so that the code pipeline can be run and verified end-to-end
-without first rebuilding the full dataset. The columns follow the same schema as
-the Belgium file (`date, humidity, speed, mintem, temperature, maxtem, load`).
-The complete series used for the reported experiments must be reconstructed by
-following the acquisition steps above.
-
 ## Spain National Grid Dataset (macro-scale benchmark)
 
 The Spain dataset is derived from the open-source **Spanish electricity grid**
@@ -120,11 +110,9 @@ pressure, humidity, wind speed and cloud cover.
 
 ## What is / is not included in this repository
 
-To keep the repository lightweight and within dataset licences, the full raw and
-processed CSVs are **not redistributed here**, with one exception: a small
-representative London sample (`data/london_data.csv`, 14 days) is included so the
-code can be exercised out of the box. This `data/` folder documents how to obtain
-and assemble each dataset using the recipes above so that `data/belgium.csv` (and
-the full London/Spain equivalents) can be rebuilt locally. The expected column
-schema and, for Belgium, the SHA-256 checksum are provided so an independently
-prepared copy can be verified.
+To keep the repository lightweight and within dataset licences, the raw and
+processed CSVs are **not redistributed here**. This `data/` folder documents how
+to obtain and assemble each dataset using the recipes above so that
+`data/belgium.csv` (and the optional London/Spain equivalents) can be rebuilt
+locally. The expected column schema and, for Belgium, the SHA-256 checksum are
+provided so an independently prepared copy can be verified.

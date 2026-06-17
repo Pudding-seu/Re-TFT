@@ -10,8 +10,6 @@ env/
 # Data (not redistributed — see data/README.md for acquisition recipe)
 data/*.csv
 *.parquet
-# Exception: a small representative London sample is shipped for demo/reproducibility
-!data/london_data.csv
 
 # Model checkpoints / large artifacts
 *.pt
