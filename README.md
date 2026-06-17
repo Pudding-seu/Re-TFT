@@ -30,6 +30,32 @@ python interval_forecasting/fair_compare.py
 
 ---
 
+## Interval metrics and the Case B quantile input
+
+The interval-forecasting metrics in **Tables 7-8** (PICP / MPIW / CWC) are produced by
+`interval_forecasting/fair_compare.py` (single-stage direct quantile, q10/q50/q90).
+
+**Case B (risk-aware MPC sensitivity sweep)** consumes the per-step P10/P90 forecasts
+of the proposed model. To generate that input — using the *same* data split,
+normalization, model configuration, quantile set, and random seed as Tables 7-8 — run:
+
+```bash
+python interval_forecasting/fair_compare.py --export-predictions \
+    --export-model Re-TFT --export-step 1 \
+    --export-output results/interval_fair/case_b_re_tft_quantiles.csv
+# Output columns: time, true, q50, q10, q90
+
+python case_studies/case_b_sensitivity_sweep.py \
+    --pred_csv results/interval_fair/case_b_re_tft_quantiles.csv \
+    --out_dir  results/case_b_sensitivity
+```
+
+The generated CSV is **not** redistributed in this repository (it is derived from
+third-party data); only the code to regenerate it is provided. `Re-TFT` here is the
+frozen-backbone (FullFreeze) proposed model.
+
+---
+
 ## Repository layout
 
 ```

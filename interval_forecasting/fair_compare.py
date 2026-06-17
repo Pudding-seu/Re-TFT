@@ -102,23 +102,24 @@ def prepare_data(pred_step):
     es, dk, lb, ld = create_sequences(Xs, df_fe["date"].values, 96, ti, pred_step)
     ms = len(lb); tr = min(max(0,te-96-pred_step+1),ms); vl = min(max(0,ve-96-pred_step+1),ms)
     Xt,Kt,yt = es[:tr],dk[:tr],lb[:tr]; Xv,Kv,yv = es[tr:vl],dk[tr:vl],lb[tr:vl]; Xe,Ke,ye = es[vl:],dk[vl:],lb[vl:]
+    lde = ld[vl:]  # test-set target timestamps, aligned with Xe/ye; used only for optional export
     print(f"  Data: tr={len(Xt)} val={len(Xv)} te={len(Xe)}")
     bs, pin = 32, True
     tl = DataLoader(SeqDataset(Xt,Kt,yt), bs, shuffle=True, pin_memory=pin)
     vl2 = DataLoader(SeqDataset(Xv,Kv,yv), bs, shuffle=False, pin_memory=pin)
     el = DataLoader(SeqDataset(Xe,Ke,ye), bs, shuffle=False, pin_memory=pin)
-    return tl, vl2, el, Xa, ti, sc
+    return tl, vl2, el, Xa, ti, sc, lde
 
 def inv(arr, Xa, ti, sc):
     arr = np.asarray(arr).reshape(-1); d = np.zeros((len(arr),Xa.shape[1]),dtype=np.float32); d[:,ti]=arr
     return sc.inverse_transform(d)[:,ti]
 
 # ===================== Run one model =====================
-def run_single(model_name, pred_step, freeze_cnn=False, freeze_lstm=False, lr=1e-3, wu=5, ep=50, pat=15):
+def run_single(model_name, pred_step, freeze_cnn=False, freeze_lstm=False, lr=1e-3, wu=5, ep=50, pat=15, export_path=None):
     torch.manual_seed(42); np.random.seed(42)
     label = f"freeze_cnn={freeze_cnn},freeze_lstm={freeze_lstm}"
     print(f"\n{'='*50}\n{model_name} step={pred_step} {label}\n{'='*50}")
-    tl, vl, el, Xa, ti, sc = prepare_data(pred_step)
+    tl, vl, el, Xa, ti, sc, te_dates = prepare_data(pred_step)
     d_in, dk_in = tl.dataset.enc_seqs.shape[2], tl.dataset.dec_known.shape[1]
 
     # Build base model for weight init
@@ -151,6 +152,19 @@ def run_single(model_name, pred_step, freeze_cnn=False, freeze_lstm=False, lr=1e
     yq = np.column_stack([inv(tep[:,i], Xa, ti, sc) for i in range(len(QUANTILES))])
     yq10, yq50, yq90 = yq[:,0], yq[:,1], yq[:,2]; yq90 = np.maximum(yq90, yq10+1e-4)
 
+    # Optional export for Case B (does not affect any metric / table value below).
+    if export_path is not None:
+        n = min(len(te_dates), len(yt))
+        Path(export_path).parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "time": np.asarray(te_dates)[:n],
+            "true": np.asarray(yt)[:n],
+            "q50":  np.asarray(yq50)[:n],
+            "q10":  np.asarray(yq10)[:n],
+            "q90":  np.asarray(yq90)[:n],
+        }).to_csv(str(export_path), index=False, encoding="utf-8")
+        print(f"  [export] {n} rows (time,true,q50,q10,q90) -> {export_path}")
+
     pt = _metrics(yt, yq50)
     itv = interval_metrics(yt, yq10, yq90, tc=0.80, ytb=inv(tl.dataset.labels, Xa, ti, sc))
     if freeze_cnn and freeze_lstm: label = "Re-TFT (FullFreeze)"
@@ -160,6 +174,36 @@ def run_single(model_name, pred_step, freeze_cnn=False, freeze_lstm=False, lr=1e
     return {"model":label,"step":pred_step,**pt,**itv,"lr":lr,"time":sec}
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser(
+        description=("Re-TFT interval (P10/P90) fair comparison. Default: reproduce the "
+                     "interval table (PICP/MPIW/CWC) for all models. With --export-predictions: "
+                     "instead export the Re-TFT quantile predictions consumed by Case B."))
+    ap.add_argument("--export-predictions", action="store_true",
+                    help="Export per-step q10/q50/q90 predictions for Case B instead of running the full comparison.")
+    ap.add_argument("--export-model", default="Re-TFT",
+                    help="Model to export: 'Re-TFT' (frozen-backbone FullFreeze, the proposed model) or a base model name.")
+    ap.add_argument("--export-step", type=int, default=1,
+                    help="Forecast horizon to export (default 1, matching the single-step Case B input).")
+    ap.add_argument("--export-output", default=str(OUT / "case_b_re_tft_quantiles.csv"),
+                    help="Output CSV path (columns: time,true,q50,q10,q90).")
+    args = ap.parse_args()
+
+    # --- Optional export mode for Case B (uses the SAME split / scaler / config /
+    #     quantiles / seed as the interval table; does not write fair_comparison.csv) ---
+    if args.export_predictions:
+        Path(args.export_output).parent.mkdir(parents=True, exist_ok=True)
+        _m = args.export_model.strip().lower()
+        if _m in ("re-tft", "retft", "re_tft", "fullfreeze", "full"):
+            run_single("CNNFrontTFT", args.export_step, freeze_cnn=True, freeze_lstm=True,
+                       lr=1e-3, ep=50, export_path=args.export_output)
+        else:
+            run_single(args.export_model, args.export_step, freeze_cnn=False, freeze_lstm=False,
+                       lr=1e-3, ep=50, export_path=args.export_output)
+        print(f"\n[export] Case B quantile predictions written to: {args.export_output}")
+        sys.exit(0)
+
+    # --- Default: full interval comparison (unchanged) ---
     all_results = []
 
     MODELS = ["CNNFrontTFT","LSTM","GRU","TCN","Transformer","TFT","NBEATS","DLinear","PatchTST","iTransformer","TimesNet"]

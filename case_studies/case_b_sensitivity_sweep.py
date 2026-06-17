@@ -23,8 +23,12 @@ Physical simulation loop (corrected "plan-on-forecast / evaluate-on-truth"):
 
 Usage
 -----
+    # First generate the quantile predictions (see interval_forecasting/):
+    #   python interval_forecasting/fair_compare.py --export-predictions \\
+    #       --export-model Re-TFT --export-step 1 \\
+    #       --export-output results/interval_fair/case_b_re_tft_quantiles.csv
     python case_studies/case_b_sensitivity_sweep.py \\
-        --pred_csv experiment_enhanced_attention/full_train/step1/predictions.csv \\
+        --pred_csv results/interval_fair/case_b_re_tft_quantiles.csv \\
         --out_dir  results/case_b_sensitivity
 
     # (pred_csv columns expected: time, true, q50, q10, q90)

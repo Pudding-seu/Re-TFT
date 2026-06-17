@@ -19,6 +19,8 @@ data/*.csv
 
 # Auto-generated results (keep tracked ones explicitly with git add -f)
 results/**/test_predictions.csv
+# Interval-forecasting outputs are regenerable; never commit derived predictions
+results/interval_fair/
 
 # OS / editor
 .DS_Store
