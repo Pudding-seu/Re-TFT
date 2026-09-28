@@ -9,7 +9,16 @@ env/
 
 # Data (not redistributed — see data/README.md for acquisition recipe)
 data/*.csv
+*.csv
+*.npy
+*.npz
+*.pkl
 *.parquet
+*.zip
+*.7z
+*.rar
+*.tar.gz
+*.pdf
 
 # Model checkpoints / large artifacts
 *.pt
@@ -21,6 +30,17 @@ data/*.csv
 results/**/test_predictions.csv
 # Interval-forecasting outputs are regenerable; never commit derived predictions
 results/interval_fair/
+results/
+
+# Private reconstruction material must never enter the public tree
+*EVIDENCE_FREEZE*/
+MASTER_PAPER_CODE_PROVENANCE.*
+*.log
+private/
+.env
+.env.*
+*.key
+*.pem
 
 # OS / editor
 .DS_Store

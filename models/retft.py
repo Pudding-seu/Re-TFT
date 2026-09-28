@@ -1,47 +1,15 @@
 # -*- coding: utf-8 -*-
-"""
-Re-TFT Model Definitions
-========================
-Implements three network classes used by the Re-TFT framework:
+"""Core Re-TFT modules for the revised forecasting-centred manuscript.
 
-  GRN                  -- Gated Residual Network (shared building block)
-  CNNFrontTFT          -- Base model: multi-scale dilated CNN → LSTM → MHA → GRN
-  CNN2TFTLSTMResidual  -- Residual correction head sharing the CNN+LSTM backbone
-                          with the base model (frozen during residual training)
+The Base model maps a historical sequence and target-time *calendar* vector to
+one scalar endpoint. The residual module copies the Base CNN/LSTM representation,
+freezes those copied parameters during residual training, and predicts one
+correction. A separately fitted validation-only affine adjustment combines the
+Base and residual outputs. This file contains no fallback/guard policy and makes
+no claim that freezing alone causes a performance gain.
 
-Architecture overview (paper Figure 1):
-
-  Input (T × F)
-      │
-  ┌───┴──────────────────────┐
-  │  Multi-Scale Dilated CNN  │  dilation rates: 1, 2, 4
-  │  (3 parallel branches)    │
-  └───┬──────────────────────┘
-      │ concat + enc_proj
-  ┌───┴──────────────────────┐
-  │  LSTM encoder             │  produces h_T (global trend summary)
-  └───┬──────────────────────┘
-      │                          ← FROZEN during residual training stage
-  ════╪════════════════════════════════════════════════════════════
-      │                          ← trainable below in Base Head
-  ┌───┴──────────────────────┐
-  │  GRN (context fusion)     │  ctx = GRN([h_T, z_fut])
-  │  Multi-Head Attention      │  Q=ctx, K/V=LSTM states
-  │  GRN (output fusion)       │
-  │  Linear → ŷ_base           │
-  └───────────────────────────┘
-
-  Residual Head (same frozen backbone, new lightweight decoder):
-      sg(h_T)  ← stop-gradient; backbone params frozen
-          │
-      GRN([sg(h_T), z_fut])  → Linear → ê_res
-
-  Final prediction:
-      ŷ_final = ŷ_base + I_guard · (α · ê_res + β)
-
-  Guard (Eq. 9 in paper — bypassed in benchmark by setting thresholds to 0):
-      I_guard = 1  if  ρ(ê_res_val, e_val) > τ_corr  AND  ΔRMSE > δ_gain
-              = 0  otherwise  →  fall back to ŷ_base
+This inspectable implementation is not a checkpoint or a full reproduction of
+the private training searches reported in the paper.
 """
 
 import torch
@@ -57,8 +25,7 @@ class GRN(nn.Module):
     """
     GRN(a) = LayerNorm(a + GLU(W2 · ELU(W1·a + b1) + b2))
 
-    Acts as a dynamic operational filter: suppresses grid noise while
-    amplifying physically relevant state changes.
+    Nonlinear transform with a gated skip connection.
     """
 
     def __init__(self, input_dim: int, hidden_dim: int, dropout: float = 0.1):
@@ -88,11 +55,8 @@ class CNNFrontTFT(nn.Module):
     """
     Multi-scale dilated CNN encoder → LSTM → MHA + GRN decoder.
 
-    The CNN bank captures human-driven diurnal profiles and weather-induced
-    periodicities at multiple resolutions (dilation rates 1, 2, 4).
-    The LSTM encodes macroscopic cross-day/cross-week load trends.
-    MHA retrieves relevant historical context conditioned on known future
-    calendar features.
+    Multi-scale CNN and LSTM encode historical load and weather features.
+    Attention queries that history using target-time calendar features.
     """
 
     def __init__(
@@ -177,16 +141,10 @@ class CNN2TFTLSTMResidual(nn.Module):
     """
     Residual correction head that shares the CNN + LSTM backbone with CNNFrontTFT.
 
-    Key design choices (paper Section 2.6.1):
-      - The backbone (convs + enc_proj + enc_lstm) is FROZEN during residual
-        training, i.e.,  ∇_{Θ_enc} L_res ≡ 0  (stop-gradient on h_T).
-      - This prevents gradients from rare extreme events propagating back into
-        the shared encoder and distorting the smooth trend representation needed
-        by the Base Head.
-      - The residual branch learns ONLY the structured peak-sensitive error
-        e_t = y_t − ŷ_{base,t}  on a fixed latent space.
-
-    Lightweight decoder: GRN([sg(h_T), z_fut]) → Linear → ê_res
+    The copied CNN/LSTM backbone is frozen during residual-stage optimization;
+    the new decoder estimates error remaining after the Base prediction. The
+    benchmark compares independently tuned strategies, not a causal isolation
+    of the freeze operation.
     """
 
     def __init__(

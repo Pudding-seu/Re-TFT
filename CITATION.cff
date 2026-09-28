@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Bridging Forecast Accuracy and Operational Value: Residual-Enhanced Load Forecasting for Battery Peak Shaving"
+type: software
+authors:
+  - family-names: Qi
+    given-names: Yu
+  - family-names: Xu
+    given-names: Qingshan
+  - family-names: Yang
+    given-names: Yongbiao
+  - family-names: Cheng
+    given-names: Rui
+  - family-names: Huang
+    given-names: Yixuan
+repository-code: "https://github.com/Pudding-seu/Re-TFT"
+license: MIT

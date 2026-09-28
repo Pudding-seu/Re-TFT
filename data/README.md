@@ -1,118 +1,28 @@
-# Data
+# Data acquisition and processed benchmark boundaries
 
-## Belgium National Grid Dataset (primary benchmark)
+This repository does not distribute raw or processed Belgium, Spain or London benchmark CSVs. Dataset licenses and terms remain those of their original providers; the repository software license does not apply to third-party data. Obtain source material from the providers, verify their current terms, and review [the detailed provenance record](../docs/DATA_PROVENANCE.md) before building local inputs. Source availability does not imply that our private processed benchmark can be recreated byte-for-byte or redistributed.
 
-The Belgian transmission-level load dataset used in all primary experiments is
-**not redistributed** in this repository due to Elia's open-data licence terms,
-which require obtaining the data from the official portal.
+## Belgium
 
-### Acquisition
+- **Public source and terms:** [Elia historical total-load data](https://opendata.elia.be/explore/dataset/ods001/) for 2023; 15-minute load target. The [Elia Open Data License](https://opendata.elia.be/pages/licence/) currently identifies CC BY 4.0. Historical weather came from the [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api); Open-Meteo currently provides API data under CC BY 4.0 and applies separate service-use terms. Provider attribution and current terms must be followed for independently acquired data.
+- **Local model schema:** `date,humidity,speed,mintem,temperature,maxtem,load`. Historic load and relative humidity, wind speed, minimum/mean/maximum temperature feed the encoder. The target-time input is calendar-only. No future target-time load or weather observation is used.
+- **Task:** past 96 rows → one scalar H1/H4/H24/H96 load target. H96 is 24 hours. The retained processed file contains 35,040 rows; 6,874 aligned test targets per horizon after feature engineering/splitting.
+- **Limit:** the exact archived Open-Meteo coordinates and spatial/temporal aggregation settings were not fully recovered. These links are acquisition starting points, not a byte-exact reproduction recipe. The processed copy remains private.
 
-1. **Load (target variable):** Elia Open Data Portal —
-   https://www.elia.be/en/grid-data/open-data/load
-   Product: *Total Load*, resolution **15 min**, year **2023**.
+## Spain
 
-2. **Meteorological covariates:** Open-Meteo historical API
-   (https://open-meteo.com/), sampled at representative nodes across Belgium
-   and spatially aggregated per 15-min interval.
+- **Public source and terms:** [Hourly energy demand generation and weather](https://www.kaggle.com/datasets/nicholasjhana/energy-consumption-generation-prices-and-weather), Kaggle ID `nicholasjhana/energy-consumption-generation-prices-and-weather`. Kaggle lists ENTSO-E for load and OpenWeather for five-city weather; its current metadata labels the Kaggle dataset `CC0: Public Domain`. Users should still review the current source page and provider terms when acquiring it.
+- **Raw to processed:** source-shaped energy and weather CSVs → UTC timestamp normalization → simple mean of selected weather across Valencia, Madrid, Bilbao, Barcelona and Seville → inner join to `total load actual` → selected temperature conversion Kelvin-to-Celsius → drop incomplete joined rows. Source pressure/cloud fields are **not** final inputs.
+- **Processed benchmark:** 35,028 rows, `date,humidity,speed,mintem,temperature,maxtem,load`, nominally hourly, `2014-12-31 23:00:00+00:00` to `2018-12-31 22:00:00+00:00`. The retained file contains irregular gaps; do not describe it as 35,064 continuous model rows. Chronological 60/20/20 protocol; 6,872 aligned test targets per horizon.
+- **Task:** past 96 processed rows → one scalar `load(t+h)`, `h ∈ {1,4,24,96}` row steps; nominal H96 is 96 hours, with elapsed-time caveats across missing hours.
+- **Policy:** acquire original files from Kaggle; the private processed CSV is not redistributed. A byte-exact Kaggle download manifest was not retained.
 
-3. Assemble as `data/belgium.csv` with exactly these columns:
+## London
 
-   | Column        | Description                                      |
-   |---------------|--------------------------------------------------|
-   | `date`        | Timestamp, format `YYYY/M/D H:MM` (e.g. `2023/1/1 0:15`) |
-   | `humidity`    | Spatial average relative humidity (%)            |
-   | `speed`       | Spatial average wind speed (m/s)                 |
-   | `mintem`      | Spatial minimum temperature (K)                  |
-   | `temperature` | Spatial average temperature (K)                  |
-   | `maxtem`      | Spatial maximum temperature (K)                  |
-   | `load`        | Total measured load (MW) — forecast target       |
+- **Public source and terms:** [Smart meters in London](https://www.kaggle.com/datasets/jeanmidev/smart-meters-in-london), associated with [UK Power Networks' Low Carbon London project](https://innovation.ukpowernetworks.co.uk/projects/low-carbon-london). Source readings are half-hourly household `energy(kWh/hh)`; the distributor also supplies archived Dark Sky weather. Kaggle currently labels licensing “Database: Open Database, Contents: © Original Authors.” That metadata does not establish permission here to redistribute the private processed benchmark, so no raw or derived London data is included and users must review the current provider terms.
+- **Raw to processed:** invalid or missing half-hourly readings are discarded. The valid `energy(kWh/hh)` values are averaged across households reporting at each timestamp and multiplied by a fixed population scale of 5,000. Available half-hour energy intervals within each hourly bin are then summed, the result is restricted to 2012–2013, and it is inner-joined to retained archived Dark Sky temperature/humidity/wind records with derived daily temperature minima/maxima. The retained producer applies no `>98%` meter-availability threshold and does not directly sum all households.
+- **Processed benchmark:** 17,542 rows, `date,humidity,speed,mintem,temperature,maxtem,load`, `2012-01-01 00:00:00` to `2013-12-31 23:00:00`. The load-only hourly series has both `2013-09-09 23:00` and `2013-09-10 00:00`, but the archived weather does not. The inner join therefore leaves a preserved jump from `2013-09-09 22:00` to `2013-09-10 01:00` (three elapsed hours). No reindexing/imputation was applied. Chronological 60/20/20 protocol; 3,374 aligned test targets per horizon.
+- **Task:** past 96 processed rows → one scalar H1/H4/H24/H96 *row-index* endpoint. These are nominally 1/4/24/96 hours, but pairs crossing the gap have a longer physical lead.
+- **Unit/policy:** this is a fixed-scale aggregated household-demand benchmark constructed from real Low Carbon London smart-meter observations. Its native processed load is kWh per hourly interval; no verified MW conversion is present in the retained producer. It is not measured Greater London regional demand. Acquire source data from the providers; neither raw meter/weather files nor the private processed CSV are redistributed.
 
-### Expected file
-
-- **35,041 lines** (header + 35,040 records = 365 days × 96 steps)
-- Continuous 15-min frequency, year 2023
-- File size: **2,935,897 bytes**
-
-### Integrity verification
-
-The exact file used for all reported experiments has the following checksum.
-Verify your independently prepared copy against it:
-
-```
-SHA-256: D890765C9282895A10795DA086BE0EB8A620D0C0E48C0173CAC998B03C253BC5
-```
-
-```powershell
-# Windows
-Get-FileHash data/belgium.csv -Algorithm SHA256
-```
-```bash
-# Linux / macOS
-sha256sum data/belgium.csv
-```
-
-> Note: the checksum is byte-exact. If your download covers a different export
-> window or the portal has revised historical values, the hash will differ even
-> when the content is scientifically equivalent; in that case compare summary
-> statistics (row count, load min/max ≈ 6,000–13,000 MW) instead.
-
-### Quick check
-
-```bash
-python - <<'EOF'
-import pandas as pd
-df = pd.read_csv("data/belgium.csv")
-df["date"] = pd.to_datetime(df["date"], format="%Y/%m/%d %H:%M", errors="coerce")
-print(df.shape)            # (35040, 7)
-print(df["load"].min(), df["load"].max())
-print(df.isna().sum())
-EOF
-```
-
-## London Microgrid Dataset (regional-scale benchmark)
-
-The London dataset is reconstructed from the **"Smart Meters in London"**
-repository, whose raw load originates from the **"Low Carbon London"** project
-led by UK Power Networks (half-hourly readings from 5,500+ households).
-
-### Acquisition & preprocessing
-
-1. **Load (target):** "Smart Meters in London" smart-meter readings.
-   Because meters were installed on a rolling basis, a *threshold-filtering*
-   step isolates a stable window in which >98% of meters are online; the
-   per-household records are then spatially aggregated and **down-sampled to
-   hourly** resolution.
-
-2. **Meteorological covariates:** hourly temperature, relative humidity and
-   wind speed for Greater London. These were taken from **archived historical
-   weather records originally obtained from the Dark Sky API**. Daily maximum
-   and minimum temperatures are broadcast across the hourly steps of each day.
-
-3. The aggregated load and weather are aligned by an inner join on timestamp;
-   rows with missing values are dropped, yielding seven columns
-   (`Date, Load, Temperature, Humidity, Wind Speed, MinTem, MaxTem`).
-
-> **Reproducibility note — Dark Sky API.** The Dark Sky API was discontinued
-> for public access in 2023, so the weather features above are drawn from
-> previously archived records rather than live queries. If you cannot access
-> the original archive, an equivalent public reanalysis source
-> (e.g., [Open-Meteo](https://open-meteo.com/)) can be substituted for the
-> Greater-London nodes to regenerate equivalent features.
-
-## Spain National Grid Dataset (macro-scale benchmark)
-
-The Spain dataset is derived from the open-source **Spanish electricity grid**
-dataset on Kaggle (≈4 years of hourly total load, ~35,064 steps). Hourly
-meteorological data are aggregated from five major cities (Madrid, Barcelona,
-Valencia, Seville, Bilbao); the selected features are temperature, atmospheric
-pressure, humidity, wind speed and cloud cover.
-
-## What is / is not included in this repository
-
-To keep the repository lightweight and within dataset licences, the raw and
-processed CSVs are **not redistributed here**. This `data/` folder documents how
-to obtain and assemble each dataset using the recipes above so that
-`data/belgium.csv` (and the optional London/Spain equivalents) can be rebuilt
-locally. The expected column schema and, for Belgium, the SHA-256 checksum are
-provided so an independently prepared copy can be verified.
+The public examples use synthetic inputs and run without any of these datasets.
