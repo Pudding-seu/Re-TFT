@@ -46,7 +46,7 @@ The manuscript also reports Spain and London deterministic direct-endpoint bench
 
 ## Legacy code
 
-[legacy/](legacy/README.md) records the publication boundary for earlier Applied Energy-era scripts. Those scripts remain private because they do not substantiate current EPSR results and would expose obsolete DR settlement, tariff BESS, Case B, risk-aware MPC, interval and guard/fallback routes as if they were supported public workflows.
+[legacy/](legacy/README.md) records the publication boundary for earlier Applied Energy-era scripts. Legacy scripts from earlier research versions are not included in the current EPSR-supported snapshot. Some remain accessible through the repository's public Git history, but they are not part of the workflow or experimental evidence supporting the present manuscript.
 
 ## Citation
 
