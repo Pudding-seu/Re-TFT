@@ -23,9 +23,11 @@ import torch.nn.functional as F
 # ─────────────────────────────────────────────────────────────────────────────
 class GRN(nn.Module):
     """
-    GRN(a) = LayerNorm(a + GLU(W2 · ELU(W1·a + b1) + b2))
+    h = Dropout(W2 · ELU(W1·a + b1) + b2)
+    GRN(a) = LayerNorm(W_skip·a + b_skip + GLU([h, h]))
+    GLU([h, h]) = h * sigmoid(h).
 
-    Nonlinear transform with a gated skip connection.
+    Nonlinear transform with a projected skip connection via self.skip(x).
     """
 
     def __init__(self, input_dim: int, hidden_dim: int, dropout: float = 0.1):
@@ -139,9 +141,11 @@ class CNNFrontTFT(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 class CNN2TFTLSTMResidual(nn.Module):
     """
-    Residual correction head that shares the CNN + LSTM backbone with CNNFrontTFT.
+    Residual head with an architecture-compatible CNN/projection/LSTM encoder.
 
-    The copied CNN/LSTM backbone is frozen during residual-stage optimization;
+    Pretrained encoder weights are copied from the trained Base and frozen.
+    Base and Residual do not share parameter objects; their GRNs are independent.
+    The copied encoder is frozen during residual-stage optimization;
     the new decoder estimates error remaining after the Base prediction. The
     benchmark compares independently tuned strategies, not a causal isolation
     of the freeze operation.
@@ -164,7 +168,7 @@ class CNN2TFTLSTMResidual(nn.Module):
         super().__init__()
         assert len(conv_kernels) == len(conv_dilations)
 
-        # ── Shared backbone (identical architecture to CNNFrontTFT encoder) ─
+        # ── Architecture-compatible encoder; pretrained weights copied from Base ─
         self.convs = nn.ModuleList()
         for k, d in zip(conv_kernels, conv_dilations):
             pad = (k - 1) * d // 2

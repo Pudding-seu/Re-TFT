@@ -1,5 +1,15 @@
 # Bridging Forecast Accuracy and Operational Value: Residual-Enhanced Load Forecasting for Battery Peak Shaving
 
+## Core methodological contribution
+
+Re-TFT combines a pretrained multi-scale CNN–LSTM forecaster with an independently trained residual correction stage. The second stage reuses a frozen copy of the pretrained encoder, followed by validation-calibrated additive refinement.
+
+1. **Base prediction:** train a multi-scale dilated CNN–LSTM forecaster with a TFT-style GRN and attention head to predict one direct scalar endpoint from 96 historical rows and a target-time calendar vector. The paper configuration uses 12 output channels per convolution branch.
+2. **Residual refinement:** form signed residual targets as truth minus the completed Base prediction in original load units. Copy the pretrained CNN, linear projection and LSTM into a new residual branch and freeze those encoder parameters. Train its independent calendar projection, GRN and scalar output head; Base and Residual GRN parameters are not shared.
+3. **Validation calibration:** fit an affine residual adjustment on validation data only, clip its slope to `[-3, 3]`, and hold its coefficients fixed during test prediction. In original units, the final scalar forecast is `Base + a * raw_residual + b`.
+
+This is a two-stage forecasting method with pretrained representation reuse and independent residual learning. It uses a TFT-style head rather than the full original TFT architecture. Freezing is a design choice; the reported comparisons do not isolate its causal effect.
+
 ## Paper
 
 This repository accompanies the revised EPSR manuscript, “Bridging Forecast Accuracy and Operational Value: Residual-Enhanced Load Forecasting for Battery Peak Shaving.” The manuscript evaluates direct-endpoint load forecasting and forecast-driven battery peak shaving.
@@ -14,11 +24,11 @@ This public repository provides the core Re-TFT model implementation and **minim
 
 ## Direct-endpoint task
 
-For each horizon `h ∈ {1, 4, 24, 96}`, the input is the **past 96 rows** and the output is **one scalar target** `y(t+h)`, not a 96-value forecast trajectory. Historic load and weather are encoder inputs. At the target timestamp, the model uses calendar information only: **no future load or meteorological observation** enters the forecast. Belgium is sampled every 15 minutes; H96 is a fixed 24-hour lead. Spain and London are processed hourly/nominally hourly and have dataset-specific timing caveats in the data documentation.
+For each horizon `h ∈ {1, 4, 24, 96}`, the input is the **past 96 rows** and the output is **one scalar target** `y(t+h)`, not a 96-value forecast trajectory. Historic load and weather are encoder inputs. The target-time input is calendar-only: target-time load and meteorological values are not supplied to the head. This input boundary alone does not establish the time availability of every derived historical covariate. Belgium is sampled every 15 minutes; H96 is a fixed 24-hour lead. Spain and London are processed hourly/nominally hourly and have dataset-specific timing caveats in the data documentation.
 
 ## Data sources
 
-Read [data/README.md](data/README.md) and [docs/DATA_PROVENANCE.md](docs/DATA_PROVENANCE.md). The manuscript's Spain and London sources have been identified, but exact byte-for-byte acquisition of the private processed benchmarks is not claimed. The London processed series is a fixed-scale household-profile scenario and contains a three-hour timestamp jump caused by missing archived weather rows.
+Read [data/README.md](data/README.md) and [docs/DATA_PROVENANCE.md](docs/DATA_PROVENANCE.md). The manuscript's Spain and London sources have been identified, but exact byte-for-byte acquisition of the private processed benchmarks is not claimed. The London processed series is a fixed-scale household-profile scenario and contains a three-hour timestamp jump caused by missing archived weather rows. Its retained `mintem` and `maxtem` are actual full-day temperature summaries backfilled to hourly rows; for origins within that day, these retrospective covariates can include subsequent observations. The London benchmark must be interpreted with that information boundary.
 
 No dataset, checkpoint, prediction archive, or evidence-freeze package is included here.
 
@@ -32,7 +42,17 @@ python examples/minimal_direct_endpoint.py
 
 This **MINIMAL IMPLEMENTATION EXAMPLE** uses synthetic 40-channel history, an eight-value target-calendar vector, randomly initialized Base and residual modules, and an illustrative affine adjustment. It demonstrates the H96 scalar shape and freeze path; it does not report a paper metric or train canonical weights.
 
+## Minimal two-stage workflow example
+
+```bash
+python examples/minimal_two_stage_workflow.py
+```
+
+This CPU-only synthetic example uses the repository's actual networks and computation interfaces. It trains a Base, constructs original-unit residual targets, copies and freezes the trained encoder, trains an independent residual head, fits an affine adjustment on a separate validation partition, and prints Base and Re-TFT predictions on a separate synthetic test partition. The short training budget demonstrates the method and does not guarantee improvement. It does not read research data, publish checkpoints or prediction archives, or reproduce manuscript tables.
+
 ## Minimal BESS example
+
+Battery peak shaving is a downstream operational-value evaluation, not a neural-network module or decision-aware training. In the paper's evaluation, the 96 daily entries are assembled from target-aligned scalar H96 forecasts issued at 96 distinct origins; they are not a 96-step trajectory issued at one origin.
 
 ```bash
 python examples/minimal_bess.py
